@@ -70,7 +70,6 @@ cn2en = {
     "術前住院天數": "PreOp_days",
     "術後住院天數": "PostOp_days"
 }
-# 反轉
 en2cn = {v: k for k, v in cn2en.items()}
 
 # ==============================
@@ -125,18 +124,21 @@ category_features = {
 }
 
 # ==============================
-# Streamlit 表單輸入
+# Streamlit 表單輸入（分上下方區塊）
 # ==============================
 st.subheader("Enter Patient Data")
 input_data_en = {}
-cols = st.columns(3)
 
-for idx, feature in enumerate(ordered_features_en):
-    with cols[idx % 3]:
+# 上方區塊：勾選型 + 類別型
+st.markdown("### Categorical / Binary Features")
+cols_top = st.columns(3)
+top_features = [f for f in ordered_features_en if f in binary_features or f in category_features]
+
+for idx, feature in enumerate(top_features):
+    with cols_top[idx % 3]:
         if feature in binary_features:
             choice = st.radio(feature, ["No", "Yes"], horizontal=True)
             input_data_en[feature] = 1 if choice == "Yes" else 0
-
         elif feature in category_features:
             choice = st.selectbox(feature, category_features[feature])
             if feature == "Sex":
@@ -144,14 +146,19 @@ for idx, feature in enumerate(ordered_features_en):
             else:
                 input_data_en[feature] = choice
 
-        else:
-            input_data_en[feature] = st.number_input(feature, min_value=0, value=0)
+# 下方區塊：數值輸入型
+st.markdown("### Numerical Features")
+cols_bottom = st.columns(3)
+bottom_features = [f for f in ordered_features_en if f not in top_features]
+
+for idx, feature in enumerate(bottom_features):
+    with cols_bottom[idx % 3]:
+        input_data_en[feature] = st.number_input(feature, min_value=0, value=0)
 
 # ==============================
 # 預測
 # ==============================
 if st.button("Predict"):
-    # 轉回中文欄位名稱給模型
     df1 = pd.DataFrame([[input_data_en[f] for f in model1_features_en]],
                        columns=[en2cn[f] for f in model1_features_en])
     df2 = pd.DataFrame([[input_data_en[f] for f in model2_features_en]],
@@ -161,39 +168,36 @@ if st.button("Predict"):
     pred1 = m1.predict_proba(df1)[:, 1][0]
     explainer1 = shap.TreeExplainer(m1)
     shap_values1 = explainer1(df1)
-    shap_values1.feature_names = model1_features_en  # 換成英文
+    shap_values1.feature_names = model1_features_en
 
     # 模型2
     pred2 = m2.predict_proba(df2)[:, 1][0]
     explainer2 = shap.TreeExplainer(m2)
     shap_values2 = explainer2(df2)
-    shap_values2.feature_names = model2_features_en  # 換成英文
+    shap_values2.feature_names = model2_features_en
 
     st.success(f"Model 1 (xgb_mortality) Predicted Mortality Risk: {pred1:.3f}")
     st.success(f"Model 2 (xgM_ALL) Predicted Mortality Risk: {pred2:.3f}")
 
-    # SHAP 表格 - 顯示英文
+    # SHAP 表格
     st.subheader("Model 1 SHAP Feature Importance")
-    shap_df1 = pd.DataFrame(
-        list(zip(model1_features_en, shap_values1.values[0])),
-        columns=["Feature", "SHAP Value"]
-    ).sort_values(by="SHAP Value", key=abs, ascending=False).reset_index(drop=True)
+    shap_df1 = pd.DataFrame(list(zip(model1_features_en, shap_values1.values[0])),
+                            columns=["Feature", "SHAP Value"]).sort_values(
+                                by="SHAP Value", key=abs, ascending=False).reset_index(drop=True)
     shap_df1.index += 1
     shap_df1.index.name = "Rank"
     st.dataframe(shap_df1)
 
     st.subheader("Model 2 SHAP Feature Importance")
-    shap_df2 = pd.DataFrame(
-        list(zip(model2_features_en, shap_values2.values[0])),
-        columns=["Feature", "SHAP Value"]
-    ).sort_values(by="SHAP Value", key=abs, ascending=False).reset_index(drop=True)
+    shap_df2 = pd.DataFrame(list(zip(model2_features_en, shap_values2.values[0])),
+                            columns=["Feature", "SHAP Value"]).sort_values(
+                                by="SHAP Value", key=abs, ascending=False).reset_index(drop=True)
     shap_df2.index += 1
     shap_df2.index.name = "Rank"
     st.dataframe(shap_df2)
 
-    # SHAP 瀑布圖 (英文)
+    # SHAP 瀑布圖
     st.subheader("SHAP Waterfall Plots")
-
     def plot_shap_waterfall(shap_values):
         fig = plt.figure()
         shap.plots.waterfall(shap_values[0], show=False)
