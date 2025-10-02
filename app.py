@@ -176,32 +176,41 @@ if st.button("Predict"):
     shap_values2 = explainer2(df2)
     shap_values2.feature_names = model2_features_en
 
-    st.success(f"Model 1 (xgb_mortality) Predicted Mortality Risk: {pred1:.3f}")
-    st.success(f"Model 2 (xgM_ALL) Predicted Mortality Risk: {pred2:.3f}")
+    # ==============================
+    # 左右顯示結果
+    # ==============================
+    col1, col2 = st.columns(2)
 
-    # SHAP 表格
-    st.subheader("Model 1 SHAP Feature Importance")
-    shap_df1 = pd.DataFrame(list(zip(model1_features_en, shap_values1.values[0])),
-                            columns=["Feature", "SHAP Value"]).sort_values(
-                                by="SHAP Value", key=abs, ascending=False).reset_index(drop=True)
-    shap_df1.index += 1
-    shap_df1.index.name = "Rank"
-    st.dataframe(shap_df1)
+    def make_shap_table(features, shap_values):
+        df = pd.DataFrame(list(zip(features, shap_values.values[0])),
+                          columns=["Feature", "SHAP Value"])
+        df["|SHAP Value|"] = df["SHAP Value"].abs()
+        df["Importance (%)"] = df["|SHAP Value|"] / df["|SHAP Value|"].sum() * 100
+        df = df.sort_values(by="|SHAP Value|", ascending=False).reset_index(drop=True)
+        df.index += 1
+        df.index.name = "Rank"
+        return df[["Feature", "Importance (%)"]]
 
-    st.subheader("Model 2 SHAP Feature Importance")
-    shap_df2 = pd.DataFrame(list(zip(model2_features_en, shap_values2.values[0])),
-                            columns=["Feature", "SHAP Value"]).sort_values(
-                                by="SHAP Value", key=abs, ascending=False).reset_index(drop=True)
-    shap_df2.index += 1
-    shap_df2.index.name = "Rank"
-    st.dataframe(shap_df2)
+    with col1:
+        st.subheader("Model 1 (xgb_mortality)")
+        st.success(f"Predicted Mortality Risk: {pred1:.3f}")
 
-    # SHAP 瀑布圖
-    st.subheader("SHAP Waterfall Plots")
-    def plot_shap_waterfall(shap_values):
-        fig = plt.figure()
-        shap.plots.waterfall(shap_values[0], show=False)
-        st.pyplot(fig)
+        shap_df1 = make_shap_table(model1_features_en, shap_values1)
+        st.dataframe(shap_df1.style.format({"Importance (%)": "{:.2f}%"}))
 
-    plot_shap_waterfall(shap_values1)
-    plot_shap_waterfall(shap_values2)
+        st.markdown("#### SHAP Waterfall Plot")
+        fig1 = plt.figure()
+        shap.plots.waterfall(shap_values1[0], show=False)
+        st.pyplot(fig1)
+
+    with col2:
+        st.subheader("Model 2 (xgM_ALL)")
+        st.success(f"Predicted Mortality Risk: {pred2:.3f}")
+
+        shap_df2 = make_shap_table(model2_features_en, shap_values2)
+        st.dataframe(shap_df2.style.format({"Importance (%)": "{:.2f}%"}))
+
+        st.markdown("#### SHAP Waterfall Plot")
+        fig2 = plt.figure()
+        shap.plots.waterfall(shap_values2[0], show=False)
+        st.pyplot(fig2)
